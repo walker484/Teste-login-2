@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teia de Ideias</title>
+
+<style>
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Arial,sans-serif;
+  background:#f4f7fb;
+  color:#243247;
+}
+header{
+  background:#fff;
+  padding:18px;
+  border-bottom:1px solid #dce4ef;
+  color:#174ea6;
+  font-size:23px;
+  font-weight:bold;
+}
+main{
+  max-width:850px;
+  margin:auto;
+  padding:15px;
+}
+.caixa{
+  background:#fff;
+  padding:16px;
+  margin-bottom:16px;
+  border:1px solid #dce4ef;
+  border-radius:12px;
+}
+h2{font-size:19px;color:#174ea6}
+label{display:block;margin:12px 0 6px}
+input,textarea{
+  width:100%;
+  padding:12px;
+  border:1px solid #cbd5e1;
+  border-radius:8px;
+  font:16px Arial,sans-serif;
+  background:white;
+}
+textarea{
+  resize:vertical;
+  line-height:1.6;
+}
+button{
+  padding:12px 15px;
+  border:0;
+  border-radius:8px;
+  background:#174ea6;
+  color:white;
+  font-weight:bold;
+  cursor:pointer;
+  margin-top:8px;
+}
+.largo{width:100%}
+.verde{background:#218653}
+#painel{display:none}
+#mensagem,#status,#statusRedacao{
+  overflow-wrap:anywhere;
+  font-size:14px;
+}
+</style>
+</head>
+
+<body>
+<header>📚 Teia de Ideias</header>
+
+<main>
+<section id="login" class="caixa">
+  <h2>Entrar na sua conta</h2>
+
+  <form id="formLogin">
+    <label for="email">E-mail</label>
+    <input id="email" type="email" required
+      placeholder="Seu e-mail">
+
+    <label for="senha">Senha</label>
+    <input id="senha" type="password" required
+      placeholder="Sua senha">
+
+    <button id="botaoEntrar" class="largo" type="submit">
+      ENTRAR
+    </button>
+  </form>
+
+  <button id="criar" class="largo" type="button">
+    CRIAR CONTA
+  </button>
+
+  <button id="voltar" class="largo" type="button">
+    VOLTAR
+  </button>
+
+  <p id="mensagem"></p>
+</section>
+
+<section id="painel">
+  <div class="caixa">
+    <p>Conectado: <span id="usuario"></span></p>
+    <button id="sair">SAIR DA CONTA</button>
+  </div>
+
+  <div class="caixa">
+    <h2>✍️ Espaço livre — suas ideias</h2>
+
+    <label for="titulo">Nome do livro ou texto</label>
+    <input id="titulo" placeholder="Ex.: Minhas ideias">
+
+    <label for="texto">Escreva livremente</label>
+    <textarea id="texto" rows="9"
+      placeholder="Escreva palavras, frases, pensamentos e ideias..."></textarea>
+
+    <button id="salvar" class="largo">
+      SALVAR IDEIAS NO FIREBASE
+    </button>
+
+    <button id="montar" class="largo verde">
+      GERAR REDAÇÃO ORGANIZADA
+    </button>
+
+    <p id="status"></p>
+  </div>
+
+
+    <div class="caixa" id="caixaRedacao">
+    <h2>📝 Redação organizada</h2>
+
+    <textarea id="redacao" rows="14"
+      placeholder="Sua redação aparecerá aqui..."></textarea>
+
+    <button id="editarRedacao" class="largo">
+      EDITAR REDAÇÃO
+    </button>
+
+    <button id="salvarRedacao" class="largo verde">
+      SALVAR NA BIBLIOTECA
+    </button>
+
+    <button id="voltarBiblioteca" class="largo">
+      VOLTAR À BIBLIOTECA
+    </button>
+
+    <p id="statusRedacao"></p>
+  </div>
+
+  <div class="caixa" id="caixaBiblioteca">
+    <h2>📚 Minha Biblioteca</h2>
+    <p>Seus textos salvos aparecem abaixo.</p>
+
+    <button id="atualizar" class="largo">
+      ATUALIZAR BIBLIOTECA
+    </button>
+
+    <div id="lista">
+      <p>Carregando livros...</p>
+    </div>
+  </div>
+</section>
+</main>
+
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
+
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  getDocs,
+  doc,
+  updateDoc,
+  serverTimestamp
+} from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyDsZUHfZ7EBatnMwwR4FKgPWLjZybIm9KI",
+  authDomain: "walker-midia.firebaseapp.com",
+  databaseURL: "https://walker-midia-default-rtdb.firebaseio.com",
+  projectId: "walker-midia",
+  storageBucket: "walker-midia.firebasestorage.app",
+  messagingSenderId: "223143706690",
+  appId: "1:223143706690:web:3c9e81a0d21173a59caddb"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+let usuarioAtual = null;
+let paginas = [];
+let paginaAbertaId = null;
+
+const campoIdeias = document.getElementById("texto");
+const campoTitulo = document.getElementById("titulo");
+const campoRedacao = document.getElementById("redacao");
+const status = document.getElementById("status");
+const statusRedacao = document.getElementById("statusRedacao");
+const lista = document.getElementById("lista");
+
+// LOGIN
+document.getElementById("formLogin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  try {
+    await signInWithEmailAndPassword(
+      auth,
+      document.getElementById("email").value.trim(),
+      document.getElementById("senha").value
+    );
+    document.getElementById("mensagem").textContent = "Entrando...";
+  } catch (erro) {
+    document.getElementById("mensagem").textContent = "Erro: " + erro.message;
+  }
+});
+
+// CRIAR CONTA
+document.getElementById("criar").onclick = async () => {
+  try {
+    await createUserWithEmailAndPassword(
+      auth,
+      document.getElementById("email").value.trim(),
+      document.getElementById("senha").value
+    );
+    document.getElementById("mensagem").textContent = "Conta criada!";
+  } catch (erro) {
+    document.getElementById("mensagem").textContent = "Erro: " + erro.message;
+  }
+};
+
+// VOLTAR
+document.getElementById("voltar").onclick = () => {
+  document.getElementById("mensagem").textContent = "";
+};
+
+// AUTENTICAÇÃO
+onAuthStateChanged(auth, async (usuario) => {
+  usuarioAtual = usuario;
+  document.getElementById("login").style.display = usuario ? "none" : "block";
+  document.getElementById("painel").style.display = usuario ? "block" : "none";
+
+  if (usuario) {
+    document.getElementById("usuario").textContent = usuario.email || "";
+    await carregarPaginas();
+  }
+});
+
+// SAIR
+document.getElementById("sair").onclick = () => signOut(auth);
+
+// SALVAR OU ATUALIZAR UM TEXTO
+async function salvarPagina(tipo, titulo, texto) {
+  if (!usuarioAtual) throw new Error("Entre na sua conta.");
+
+  const dados = {
+    uid: usuarioAtual.uid,
+    tipo,
+    titulo: titulo || "Texto sem título",
+    texto,
+    atualizadoEm: serverTimestamp()
+  };
+
+  if (paginaAbertaId && paginas.some(p => p.id === paginaAbertaId)) {
+    await updateDoc(doc(db, "ideias", paginaAbertaId), dados);
+    return paginaAbertaId;
+  }
+
+  dados.criadoEm = serverTimestamp();
+  const referencia = await addDoc(collection(db, "ideias"), dados);
+  paginaAbertaId = referencia.id;
+  return referencia.id;
+}
+
+// SALVAR IDEIAS DO CAMPO DE CIMA
+document.getElementById("salvar").onclick = async () => {
+  try {
+    const texto = campoIdeias.value.trim();
+    if (!texto) {
+      status.textContent = "Escreva suas ideias primeiro.";
+      return;
+    }
+
+    await salvarPagina(
+      "ideias",
+      campoTitulo.value.trim() || "Minhas ideias",
+      texto
+    );
+
+    status.textContent = "Ideias salvas!";
+    await carregarPaginas();
+  } catch (erro) {
+    status.textContent = "Erro ao salvar: " + erro.message;
+  }
+};
+
+// GERAR E JUNTAR À REDAÇÃO EXISTENTE
+document.getElementById("montar").onclick = () => {
+  const novasIdeias = campoIdeias.value.trim();
+
+  if (!novasIdeias) {
+    status.textContent = "Escreva novas ideias no campo de cima.";
+    return;
+  }
+
+  const organizadas = novasIdeias
+    .split(/\n+/)
+    .map(frase => frase.trim().replace(/\s+/g, " "))
+    .filter(Boolean)
+    .join("\n\n");
+
+  const anterior = campoRedacao.value.trim();
+  campoRedacao.value = anterior
+    ? anterior + "\n\n" + organizadas
+    : organizadas;
+
+  status.textContent = "Ideias acrescentadas à redação.";
+  statusRedacao.textContent = "Confira e salve a redação.";
+};
+
+// EDITAR A REDAÇÃO NO CAMPO DE BAIXO
+document.getElementById("editarRedacao").onclick = () => {
+  campoRedacao.focus();
+  statusRedacao.textContent = "Edite o texto e salve novamente.";
+};
+
+// SALVAR REDAÇÃO
+document.getElementById("salvarRedacao").onclick = async () => {
+  try {
+    const texto = campoRedacao.value.trim();
+    if (!texto) {
+      statusRedacao.textContent = "Não há redação para salvar.";
+      return;
+    }
+
+    await salvarPagina(
+      "redacao",
+      campoTitulo.value.trim() || "Minha redação",
+      texto
+    );
+
+    statusRedacao.textContent = "Redação salva na Biblioteca!";
+    await carregarPaginas();
+  } catch (erro) {
+    statusRedacao.textContent = "Erro: " + erro.message;
+  }
+};
+
+// BUSCAR LIVROS NO FIREBASE
+async function carregarPaginas() {
+  if (!usuarioAtual) return;
+
+  lista.textContent = "Carregando Biblioteca...";
+
+  try {
+    const resultado = await getDocs(collection(db, "ideias"));
+
+    paginas = resultado.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .filter(p => p.uid === usuarioAtual.uid)
+      .sort((a, b) =>
+        (b.criadoEm?.seconds || 0) - (a.criadoEm?.seconds || 0)
+      );
+
+    mostrarBiblioteca();
+  } catch (erro) {
+    lista.textContent = "Erro ao carregar: " + erro.message;
+  }
+}
+
+// MOSTRAR TÍTULOS NA BIBLIOTECA
+function mostrarBiblioteca() {
+  lista.innerHTML = "";
+
+  if (!paginas.length) {
+    lista.textContent = "Sua Biblioteca está vazia. Salve seu primeiro texto.";
+    return;
+  }
+
+  paginas.forEach(pagina => {
+    const botao = document.createElement("button");
+    botao.type = "button";
+    botao.style.display = "block";
+    botao.style.width = "100%";
+    botao.style.textAlign = "left";
+    botao.style.margin = "6px 0";
+    botao.style.background = "#fff";
+    botao.style.color = "#174ea6";
+    botao.style.border = "1px solid #dce4ef";
+    botao.textContent =
+      "📘 " + (pagina.titulo || "Sem título") +
+      (pagina.tipo === "redacao" ? " — Redação" : " — Ideias");
+
+    botao.onclick = () => abrirPagina(pagina.id);
+    lista.appendChild(botao);
+  });
+}
+
+// ABRIR UM LIVRO SALVO
+function abrirPagina(id) {
+  const pagina = paginas.find(p => p.id === id);
+  if (!pagina) return;
+
+  paginaAbertaId = pagina.id;
+  campoTitulo.value = pagina.titulo || "";
+
+  if (pagina.tipo === "redacao") {
+    campoRedacao.value = pagina.texto || "";
+    campoIdeias.value = "";
+    statusRedacao.textContent =
+      "Livro aberto. Escreva novas ideias acima e gere novamente.";
+  } else {
+    campoIdeias.value = pagina.texto || "";
+    status.textContent = "Ideias recuperadas. Você pode continuar escrevendo.";
+  }
+
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+// ATUALIZAR BIBLIOTECA
+document.getElementById("atualizar").onclick = carregarPaginas;
+
+// VOLTAR À BIBLIOTECA
+document.getElementById("voltarBiblioteca").onclick = async () => {
+  campoIdeias.value = "";
+  campoRedacao.value = "";
+  campoTitulo.value = "";
+  paginaAbertaId = null;
+  await carregarPaginas();
+  document.getElementById("caixaBiblioteca").scrollIntoView({
+    behavior: "smooth"
+  });
+};
+</script>
+</body>
+</html>
+
+
+
+
+
+  
